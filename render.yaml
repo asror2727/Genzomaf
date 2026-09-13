@@ -1,0 +1,14 @@
+services:
+  - type: worker
+    name: mafia-telegram-bot
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python main.py
+    envVars:
+      - key: BOT_TOKEN
+        sync: false
+      - key: OWNER_ID
+        value: "7651404790"
+      - key: DB_PATH
+        value: mafia.db
