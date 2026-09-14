@@ -27,3 +27,19 @@ DEFAULT_SETTINGS = {
 }
 
 CHANNEL_USERNAME = "genzomafiauz"
+PAYMENT_CARD = "8600 1234 5678 9012"
+
+# Do'kon narxlari (almazda)
+SHOP_ITEM_PRICES = {
+    "shield": 2,
+    "mask": 2,
+    "gun": 3,
+    "fake_doc": 2,
+}
+
+# Almaz sotib olish paketlari: {miqdor: narx (so'mda)}
+DIAMOND_PACKAGES = {1: 1000, 10: 9000}
+
+# Pulga konvertatsiya qilinadigan almaz miqdorlari (200 pul = 1 almaz)
+MONEY_CONVERSION_RATE = 200  # 1 almaz = 200 pul
+MONEY_CONVERT_OPTIONS = [1, 5, 10, 50]

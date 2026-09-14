@@ -40,7 +40,25 @@ handlers/admin.py     — /admin — faqat OWNER_ID uchun boshqaruv paneli
 locales/*.json        — har til uchun barcha matnlar
 ```
 
-## Hozircha amalga oshirilgan (v1)
+## Hozircha amalga oshirilgan (v2 — bu yangilanishda tuzatilgan/qo'shilgan)
+
+- ✅ **6 tilning barchasi endi haqiqiy tarjima bilan ishlaydi** (avval faqat uz/en, qolganlari nusxa edi)
+- ✅ **`/stop`** — o'yin yoki ro'yxatni istalgan guruh admini/owner to'xtata oladi (avval "stuck" holatdan chiqib bo'lmas edi)
+- ✅ **`/leave`** — ro'yxatdan yoki o'yindan chiqish
+- ✅ **`/vaqt 100`** — ro'yxatdan o'tish vaqtini soniyaga uzaytirish
+- ✅ **`/give`, `/send`, `/token`** — reply orqali sovg'a, pul, token berish (ismlar bosiladigan, profilga o'tadi)
+- ✅ **`/giveaway 100`** — ishtirok etish tugmasi bilan, 60 soniyadan keyin tasodifiy g'oliblarga bo'lib beradi
+- ✅ **`/mypara`** (reply bilan taklif), **`/parauzish`**, **`/parakorish`** — juftlik tizimi
+- ✅ **`/top`**, **`/qoida`** — guruh reytingi va qoidalar
+- ✅ **`/settings`** — kategoriyalar bo'yicha ishlaydigan menyu (vaqt/jimlik/arjament/boshqa), yoqish-o'chirish tugmalari haqiqatan DB'ga yoziladi
+- ✅ **Profildagi tugmalar ishlaydi**: Do'kon (shield/mask/gun/fake_doc sotib olish), Pul xarid qilish (almazni pulga aylantirish), Almaz xarid qilish (chek yuborish → admin tasdiqlaydi → balансga tushadi)
+- ✅ **Admin panel to'liq**: narxlarni ko'rish, kutilayotgan to'lovlarni tasdiqlash, qoidalarni tahrirlash, premium guruh qo'shish, **NPC (bot) o'yinchi qo'shish** (guruh ID + son), statistika, broadcast
+- ✅ **Ro'yxatdagi va o'yindagi ismlar endi bosiladigan** (`tg://user?id=...` havola) — bosilsa profilga o'tadi
+- ✅ **Muhim mantiqiy tuzatish**: agar Don/Doktor/Komissar vaqtida javob bermasa, endi avtomatik tasodifiy tanlov qo'yiladi — avval hech kim javob bermasa o'yin **hech qachon tugamas edi** (bu test orqali aniqlanib, tuzatildi)
+- ✅ **Admin panelning routing xatosi tuzatildi** — avval owner har qanday matn yozganda (guruhda ham) admin handler uni "ushlab qolib", boshqa buyruqlarning ishlashiga to'sqinlik qilardi
+
+## Avvalgi (v1) imkoniyatlar
+
 
 - ✅ Til tanlash (6 til, `locales/*.json` orqali kengaytiriladi)
 - ✅ `/start`, `/profile`, `/reyting`
@@ -52,21 +70,17 @@ locales/*.json        — har til uchun barcha matnlar
 - ✅ `/admin` — faqat owner uchun, statistika va to'lov tasdiqlash (`approve_tx_<id>`)
 - ✅ Har guruh mustaqil sozlamaga ega (`groups.settings` JSON, `/settings` skeleton)
 
-## Keyingi bosqichlar (TODO — kod ichida belgilangan)
+## Keyingi bosqichlar (TODO)
 
-- `/settings` to'liq inline menyu (vaqtlar, jimlik, arjament, boshqa sozlamalar)
 - Qo'shimcha rollar: Advokat, Daydi, Kezuvchi, Serjant, Afsungar, Bo'ri, Qotil
-- Do'kon: haqiqiy to'lov oqimi (chek yuborish → admin tasdiqlaydi → `approve_tx_<id>` callback allaqachon tayyor)
-- Premium guruhlar ro'yxati (admin panel orqali)
-- `/giveaway`, `/send`, `/token`, `/top`, `/leave`, `/extend`, `/stop`
-- NPC (bot) o'yinchilar + AI suhbat integratsiyasi
+- `/settings` ichidagi vaqt/jimlik/arjament bo'limlariga to'liq +/- tugmalari (hozir vaqt uchun `/vaqt` komandasi ishlatiladi)
+- Guruh bo'yicha alohida til va alohida statistika (hozir global)
+- NPC o'yinchilarning tungi/kunduzgi "jonli suhbat" AI qismi (Anthropic API orqali)
 
-## Test qilingan qismlar
+## Test qilingan qismlar (bu yangilanishda)
 
 - Barcha `.py` fayllar sintaksis bo'yicha tekshirildi (`py_compile`)
-- `game/roles.py` — rol taqsimoti (4/10/15/20/30 o'yinchi) va g'alaba shartlari unit-test qilindi
-- `database.py` sxemasi va SQL so'rovlari standart `sqlite3` bilan tasdiqlandi
-- `i18n.py` — barcha 6 til uchun matn yuklash tekshirildi
-
-`aiogram`/`aiosqlite` kutubxonalari joriy sandbox'da tarmoq yo'qligi sababli o'rnatilmadi —
-`pip install -r requirements.txt` ishga tushirilgan muhitda avtomatik o'rnatiladi va bot to'liq ishga tayyor.
+- Offline stub (`aiogram`/`aiosqlite` o'rniga soddalashtirilgan versiya) yordamida **to'liq o'yin oqimi** simulyatsiya qilindi: ro'yxatdan o'tish → NPC qo'shish → o'yin boshlash → tun/kun/ovoz → g'alaba — 4, 6, 10, 15 o'yinchi bilan sinaldi, hammasi muvaffaqiyatli tugadi
+- Juftlik (`pairs`), premium guruhlar, qoidalar (`kv_store`), tranzaksiyalar (to'lov tasdiqlash) DB funksiyalari alohida sinaldi
+- Barcha 6 tilning JSON fayllari kalitlari bir-biriga mos ekanligi va kodda ishlatilgan har bir tarjima kaliti mavjudligi avtomatik tekshirildi
+- **Muhim**: haqiqiy `aiogram`/`aiosqlite` kutubxonalari sandboxda internet yo'qligi sabab o'rnatilmadi — lekin ularning ishlash mantig'i soddalashtirilgan stublar orqali tasdiqlandi. Render'da `pip install -r requirements.txt` bilan haqiqiy kutubxonalar o'rnatiladi.

@@ -38,6 +38,21 @@ CREATE TABLE IF NOT EXISTS transactions (
     status TEXT DEFAULT 'pending',
     created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+
+CREATE TABLE IF NOT EXISTS pairs (
+    user_id INTEGER PRIMARY KEY,
+    partner_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS premium_groups (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    link TEXT
+);
+
+CREATE TABLE IF NOT EXISTS kv_store (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
 """
 
 
@@ -168,6 +183,84 @@ class Database:
     async def get_transaction(self, tx_id: int):
         cur = await self._conn.execute("SELECT * FROM transactions WHERE id=?", (tx_id,))
         return await cur.fetchone()
+
+    async def get_last_pending_for_user(self, user_id: int):
+        cur = await self._conn.execute(
+            "SELECT id, kind, amount FROM transactions WHERE user_id=? AND status='pending' "
+            "ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        )
+        return await cur.fetchone()
+
+    async def pending_transactions(self, limit: int = 20):
+        cur = await self._conn.execute(
+            "SELECT id, user_id, kind, amount FROM transactions WHERE status='pending' ORDER BY id DESC LIMIT ?",
+            (limit,),
+        )
+        return await cur.fetchall()
+
+    # ---------- PAIRS (juftlik / "para") ----------
+    async def get_pair(self, user_id: int) -> int | None:
+        cur = await self._conn.execute("SELECT partner_id FROM pairs WHERE user_id=?", (user_id,))
+        row = await cur.fetchone()
+        return row[0] if row else None
+
+    async def set_pair(self, user_a: int, user_b: int):
+        await self._conn.execute(
+            "INSERT INTO pairs (user_id, partner_id) VALUES (?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET partner_id=excluded.partner_id",
+            (user_a, user_b),
+        )
+        await self._conn.execute(
+            "INSERT INTO pairs (user_id, partner_id) VALUES (?, ?) "
+            "ON CONFLICT(user_id) DO UPDATE SET partner_id=excluded.partner_id",
+            (user_b, user_a),
+        )
+        await self._conn.commit()
+
+    async def remove_pair(self, user_id: int):
+        partner_id = await self.get_pair(user_id)
+        await self._conn.execute("DELETE FROM pairs WHERE user_id=?", (user_id,))
+        if partner_id:
+            await self._conn.execute("DELETE FROM pairs WHERE user_id=?", (partner_id,))
+        await self._conn.commit()
+        return partner_id
+
+    # ---------- PREMIUM GROUPS ----------
+    async def add_premium_group(self, link: str):
+        await self._conn.execute("INSERT INTO premium_groups (link) VALUES (?)", (link,))
+        await self._conn.commit()
+
+    async def list_premium_groups(self, limit: int = 10):
+        cur = await self._conn.execute(
+            "SELECT link FROM premium_groups ORDER BY id DESC LIMIT ?", (limit,)
+        )
+        rows = await cur.fetchall()
+        return [r[0] for r in rows]
+
+    # ---------- KV STORE (qoidalar, narxlar va h.k.) ----------
+    async def kv_get(self, key: str, default: str = "") -> str:
+        cur = await self._conn.execute("SELECT value FROM kv_store WHERE key=?", (key,))
+        row = await cur.fetchone()
+        return row[0] if row else default
+
+    async def kv_set(self, key: str, value: str):
+        await self._conn.execute(
+            "INSERT INTO kv_store (key, value) VALUES (?, ?) "
+            "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+            (key, value),
+        )
+        await self._conn.commit()
+
+    async def all_user_ids(self) -> list[int]:
+        cur = await self._conn.execute("SELECT user_id FROM users")
+        rows = await cur.fetchall()
+        return [r[0] for r in rows]
+
+    async def group_top(self, chat_id: int, limit: int = 20):
+        """Hozircha guruh ichidagi statistika alohida saqlanmaydi — global reyting qaytariladi.
+        Kelajakda group_players jadvali qo'shilib, guruh bo'yicha ajratiladi."""
+        return await self.top_rating(limit)
 
 
 db = Database()
