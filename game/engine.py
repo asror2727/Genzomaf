@@ -9,10 +9,22 @@ from aiogram.exceptions import TelegramBadRequest
 
 from database import db
 from i18n import t
-from config import DEFAULT_SETTINGS
 from game.roles import (
     Role, distribute_roles, ROLE_LOCALE_KEY, ROLE_DESC_KEY, ROLE_SIDE, check_winner,
 )
+
+NPC_NAMES = [
+    "Eagle", "Dust", "Falcon", "Shadow", "Ghost", "Wolf", "Tiger", "Cobra",
+    "Raven", "Viper", "Storm", "Blaze", "Rex", "Nomad", "Phantom", "Hunter",
+]
+
+
+def mention(user_id: int, name: str, is_bot: bool = False) -> str:
+    """Foydalanuvchi nomini bosiladigan (profilga o'tadigan) havola qilib qaytaradi."""
+    safe_name = name.replace("<", "").replace(">", "")
+    if is_bot:
+        return f"🤖 {safe_name}"
+    return f'<a href="tg://user?id={user_id}">{safe_name}</a>'
 
 
 class Phase(str, Enum):
@@ -24,11 +36,15 @@ class Phase(str, Enum):
 
 
 class Player:
-    def __init__(self, user_id: int, name: str):
+    def __init__(self, user_id: int, name: str, is_bot: bool = False):
         self.user_id = user_id
         self.name = name
         self.alive = True
         self.role: Role | None = None
+        self.is_bot = is_bot
+
+    def mention(self) -> str:
+        return mention(self.user_id, self.name, self.is_bot)
 
 
 class Game:
@@ -45,7 +61,9 @@ class Game:
         self.votes: dict[int, int] = {}  # voter -> target
         self.lock = asyncio.Lock()
         self._reg_task: asyncio.Task | None = None
-        self._phase_task: asyncio.Task | None = None
+        self._night_task: asyncio.Task | None = None
+        self._vote_task: asyncio.Task | None = None
+        self._next_npc_id = -1
 
     def alive_players(self) -> list[Player]:
         return [p for p in self.players.values() if p.alive]
@@ -54,8 +72,13 @@ class Game:
         return {p.user_id: p.role for p in self.alive_players()}
 
     def format_alive_list(self) -> str:
-        lines = [f"{i+1}. {p.name}" for i, p in enumerate(self.alive_players())]
+        lines = [f"{i+1}. {p.mention()}" for i, p in enumerate(self.alive_players())]
         return "\n".join(lines)
+
+    def new_npc_id(self) -> int:
+        npc_id = self._next_npc_id
+        self._next_npc_id -= 1
+        return npc_id
 
 
 class GameManager:
@@ -95,19 +118,31 @@ class GameManager:
         )
 
     async def _registration_timeout(self, bot: Bot, chat_id: int, seconds: int):
-        await asyncio.sleep(seconds)
+        try:
+            await asyncio.sleep(seconds)
+        except asyncio.CancelledError:
+            return
         game = self.games.get(chat_id)
         if not game or game.phase != Phase.REGISTRATION:
             return
         if len(game.players) < game.settings.get("min_players", 4):
             await bot.send_message(chat_id, t(game.lang, "reg_not_enough"))
             await self._unpin(bot, game)
-            del self.games[chat_id]
+            self.games.pop(chat_id, None)
         # yetarli bo'lsa — owner/admin /start bosishini kutadi (avto boshlanmaydi)
 
+    async def extend_registration(self, bot: Bot, chat_id: int, seconds: int) -> bool:
+        game = self.games.get(chat_id)
+        if not game or game.phase != Phase.REGISTRATION:
+            return False
+        if game._reg_task and not game._reg_task.done():
+            game._reg_task.cancel()
+        game._reg_task = asyncio.create_task(
+            self._registration_timeout(bot, chat_id, seconds)
+        )
+        return True
+
     async def add_player(self, bot: Bot, chat_id: int, user_id: int, name: str) -> str:
-        """Callback bosilganda chaqiriladi. Natija matnini qaytaradi (guruhga yozish uchun kerak emas,
-        chunki xabar tahrirlanadi)."""
         game = self.games.get(chat_id)
         if not game or game.phase != Phase.REGISTRATION:
             return "no_active"
@@ -120,8 +155,26 @@ class GameManager:
         await self._refresh_registration_message(bot, game)
         return "ok"
 
+    async def add_npc_players(self, bot: Bot, chat_id: int, count: int) -> list[str]:
+        game = self.games.get(chat_id)
+        if not game or game.phase != Phase.REGISTRATION:
+            return []
+        added_names = []
+        async with game.lock:
+            available_names = [n for n in NPC_NAMES if n not in {p.name for p in game.players.values()}]
+            random.shuffle(available_names)
+            for i in range(count):
+                if len(game.players) >= game.settings.get("max_players", 30):
+                    break
+                name = available_names[i] if i < len(available_names) else f"Bot{-game._next_npc_id}"
+                npc_id = game.new_npc_id()
+                game.players[npc_id] = Player(npc_id, name, is_bot=True)
+                added_names.append(name)
+        await self._refresh_registration_message(bot, game)
+        return added_names
+
     async def _refresh_registration_message(self, bot: Bot, game: Game):
-        names = ", ".join(p.name for p in game.players.values()) or "-"
+        names = ", ".join(p.mention() for p in game.players.values()) or "-"
         text = t(game.lang, "reg_started", players=names, count=len(game.players))
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=t(game.lang, "reg_join_btn"), callback_data="reg_join")]
@@ -134,13 +187,12 @@ class GameManager:
             pass
 
     async def try_force_start(self, bot: Bot, chat_id: int) -> bool:
-        """/start bosilganda chaqiriladi — yetarli odam bo'lsa o'yinni boshlaydi."""
         game = self.games.get(chat_id)
         if not game or game.phase != Phase.REGISTRATION:
             return False
         if len(game.players) < game.settings.get("min_players", 4):
             return False
-        if game._reg_task:
+        if game._reg_task and not game._reg_task.done():
             game._reg_task.cancel()
         await self._unpin(bot, game)
         await self._begin_game(bot, game)
@@ -151,6 +203,35 @@ class GameManager:
             await bot.unpin_chat_message(game.chat_id, game.reg_message_id)
         except TelegramBadRequest:
             pass
+
+    # ---------------- STOP / LEAVE ----------------
+
+    async def stop_game(self, bot: Bot, chat_id: int) -> bool:
+        """/stop — istalgan fazadagi o'yin yoki ro'yxatni to'xtatadi va tozalaydi."""
+        game = self.games.pop(chat_id, None)
+        if not game:
+            return False
+        for task in (game._reg_task, game._night_task, game._vote_task):
+            if task and not task.done():
+                task.cancel()
+        if game.reg_message_id:
+            await self._unpin(bot, game)
+        return True
+
+    async def leave_player(self, bot: Bot, chat_id: int, user_id: int) -> bool:
+        game = self.games.get(chat_id)
+        if not game or user_id not in game.players:
+            return False
+        if game.phase == Phase.REGISTRATION:
+            del game.players[user_id]
+            await self._refresh_registration_message(bot, game)
+        else:
+            player = game.players[user_id]
+            player.alive = False
+            winner = check_winner(game.alive_roles())
+            if winner:
+                await self._finish_game(bot, game, winner)
+        return True
 
     # ---------------- GAME START / ROLE ASSIGNMENT ----------------
 
@@ -165,8 +246,9 @@ class GameManager:
 
         await bot.send_message(game.chat_id, t(game.lang, "game_start_announce"))
 
-        # rollarni private'da yuborish
         for player in game.players.values():
+            if player.is_bot:
+                continue
             role_name = t(game.lang, ROLE_LOCALE_KEY[player.role])
             desc = t(game.lang, ROLE_DESC_KEY[player.role])
             try:
@@ -174,7 +256,7 @@ class GameManager:
                     player.user_id, t(game.lang, "you_are_role", role=role_name, description=desc)
                 )
             except TelegramBadRequest:
-                pass  # foydalanuvchi botni bloklagan bo'lishi mumkin
+                pass
 
         await self._run_night(bot, game)
 
@@ -187,24 +269,39 @@ class GameManager:
 
         await bot.send_message(game.chat_id, t(game.lang, "night_intro"))
         alive = game.alive_players()
-        count_line = self._alive_count_summary(game)
         await bot.send_message(
             game.chat_id,
-            t(game.lang, "alive_players_header", players=game.format_alive_list(), count=count_line),
+            t(game.lang, "alive_players_header", players=game.format_alive_list(), count=len(alive)),
         )
 
-        # har bir tungi rolga ega tirik o'yinchiga tanlov yuboriladi
         night_roles = {Role.DON: "night_don_choose", Role.DOCTOR: "night_doctor_choose",
                        Role.COMMISSIONER: "night_commissioner_choose"}
+
         pending = []
         for player in alive:
-            if player.role in night_roles:
+            if player.role not in night_roles:
+                continue
+            if player.is_bot:
+                self._npc_night_action(game, player)
+            else:
                 pending.append(self._send_night_choice(bot, game, player, night_roles[player.role]))
         if pending:
             await asyncio.gather(*pending)
 
-        await asyncio.sleep(game.settings.get("night_time", 45))
+        try:
+            game._night_task = asyncio.current_task()
+            await asyncio.sleep(game.settings.get("night_time", 45))
+        except asyncio.CancelledError:
+            return
         await self._resolve_night(bot, game)
+
+    def _npc_night_action(self, game: Game, npc: Player):
+        """Bot (NPC) o'yinchi tungi harakatini avtomatik, tasodifiy tanlaydi."""
+        targets = [p for p in game.alive_players() if p.user_id != npc.user_id]
+        if not targets:
+            return
+        target = random.choice(targets)
+        game.night_actions.setdefault(npc.role.value, {})[npc.user_id] = target.user_id
 
     async def _send_night_choice(self, bot: Bot, game: Game, player: Player, prompt_key: str):
         targets = [p for p in game.alive_players() if p.user_id != player.user_id]
@@ -225,6 +322,18 @@ class GameManager:
         game.night_actions.setdefault(role, {})[actor] = target
 
     async def _resolve_night(self, bot: Bot, game: Game):
+        # Vaqtida javob bermagan faol rollarga (Don/Doktor/Komissar) avtomatik tasodifiy
+        # tanlov beriladi — aks holda hech kim harakat qilmasa o'yin cheksiz davom etib qolardi.
+        night_roles = {Role.DON, Role.DOCTOR, Role.COMMISSIONER}
+        for player in game.alive_players():
+            if player.role not in night_roles:
+                continue
+            role_actions = game.night_actions.setdefault(player.role.value, {})
+            if player.user_id not in role_actions:
+                targets = [p for p in game.alive_players() if p.user_id != player.user_id]
+                if targets:
+                    role_actions[player.user_id] = random.choice(targets).user_id
+
         don_targets = game.night_actions.get(Role.DON.value, {})
         doctor_targets = game.night_actions.get(Role.DOCTOR.value, {})
         commissioner_targets = game.night_actions.get(Role.COMMISSIONER.value, {})
@@ -232,10 +341,12 @@ class GameManager:
         killed_id = next(iter(don_targets.values()), None)
         saved_ids = set(doctor_targets.values())
 
-        # komissar natijasini xabar qilish
         for actor, target in commissioner_targets.items():
             target_player = game.players.get(target)
             if not target_player:
+                continue
+            actor_player = game.players.get(actor)
+            if actor_player and actor_player.is_bot:
                 continue
             if ROLE_SIDE.get(target_player.role) == "mafia":
                 await self._safe_send(bot, actor, t(game.lang, "commissioner_result_mafia", name=target_player.name))
@@ -250,20 +361,18 @@ class GameManager:
                 died_player = victim
 
         game.phase = Phase.DAY
-        await bot.send_message(
-            game.chat_id, t(game.lang, "day_intro", day=game.day_number)
-        )
+        await bot.send_message(game.chat_id, t(game.lang, "day_intro", day=game.day_number))
         await bot.send_message(
             game.chat_id,
             t(game.lang, "alive_players_header", players=game.format_alive_list(),
-              count=self._alive_count_summary(game)),
+              count=len(game.alive_players())),
         )
 
         if died_player:
             killer_role_name = t(game.lang, ROLE_LOCALE_KEY[Role.DON])
             await bot.send_message(
                 game.chat_id,
-                t(game.lang, "died_announce", name=died_player.name, killer_role=killer_role_name),
+                t(game.lang, "died_announce", name=died_player.mention(), killer_role=killer_role_name),
             )
         else:
             await bot.send_message(game.chat_id, t(game.lang, "no_one_died"))
@@ -273,11 +382,11 @@ class GameManager:
             await self._finish_game(bot, game, winner)
             return
 
-        await asyncio.sleep(game.settings.get("day_time", 60))
+        try:
+            await asyncio.sleep(game.settings.get("day_time", 60))
+        except asyncio.CancelledError:
+            return
         await self._start_vote(bot, game)
-
-    def _alive_count_summary(self, game: Game) -> str:
-        return str(len(game.alive_players()))
 
     async def _safe_send(self, bot: Bot, user_id: int, text: str, **kwargs):
         try:
@@ -290,11 +399,22 @@ class GameManager:
     async def _start_vote(self, bot: Bot, game: Game):
         game.phase = Phase.VOTE
         game.votes = {}
+
+        # NPC'lar darhol tasodifiy ovoz beradi
+        for npc in [p for p in game.alive_players() if p.is_bot]:
+            targets = [p for p in game.alive_players() if p.user_id != npc.user_id]
+            if targets:
+                game.votes[npc.user_id] = random.choice(targets).user_id
+
         kb = InlineKeyboardMarkup(inline_keyboard=[
             [InlineKeyboardButton(text=t(game.lang, "vote_btn"), callback_data="open_vote")]
         ])
         await bot.send_message(game.chat_id, t(game.lang, "vote_start"), reply_markup=kb)
-        await asyncio.sleep(game.settings.get("vote_time", 30))
+        try:
+            game._vote_task = asyncio.current_task()
+            await asyncio.sleep(game.settings.get("vote_time", 30))
+        except asyncio.CancelledError:
+            return
         await self._resolve_vote(bot, game)
 
     async def open_vote_menu(self, bot: Bot, chat_id: int, user_id: int):
@@ -317,11 +437,11 @@ class GameManager:
         if not game or game.phase != Phase.VOTE:
             return
         game.votes[voter_id] = target_id
-        voter_name = game.players[voter_id].name
-        target_name = game.players[target_id].name
+        voter = game.players[voter_id]
+        target = game.players[target_id]
         if not game.settings.get("anonymous_vote", False):
             await bot.send_message(
-                chat_id, t(game.lang, "vote_cast_announce", voter=voter_name, target=target_name)
+                chat_id, t(game.lang, "vote_cast_announce", voter=voter.mention(), target=target.mention())
             )
 
     async def _resolve_vote(self, bot: Bot, game: Game):
@@ -341,7 +461,7 @@ class GameManager:
                 hanged.alive = False
                 role_name = t(game.lang, ROLE_LOCALE_KEY[hanged.role])
                 await bot.send_message(
-                    game.chat_id, t(game.lang, "vote_hanged", name=hanged.name, role=role_name)
+                    game.chat_id, t(game.lang, "vote_hanged", name=hanged.mention(), role=role_name)
                 )
 
         winner = check_winner(game.alive_roles())
@@ -359,12 +479,12 @@ class GameManager:
         losers = [p for p in game.players.values() if ROLE_SIDE[p.role] != winner_side]
 
         winners_text = "\n".join(
-            f"{i+1}. {p.name} — {t(game.lang, ROLE_LOCALE_KEY[p.role])}" for i, p in enumerate(winners)
+            f"{i+1}. {p.mention()} — {t(game.lang, ROLE_LOCALE_KEY[p.role])}" for i, p in enumerate(winners)
         ) or "-"
         losers_text = "\n".join(
-            f"{i+1}. {p.name} — {t(game.lang, ROLE_LOCALE_KEY[p.role])}" for i, p in enumerate(losers)
+            f"{i+1}. {p.mention()} — {t(game.lang, ROLE_LOCALE_KEY[p.role])}" for i, p in enumerate(losers)
         ) or "-"
-        minutes = int((time.time() - game.started_at) / 60)
+        minutes = max(1, int((time.time() - game.started_at) / 60))
 
         await bot.send_message(
             game.chat_id,
@@ -374,13 +494,15 @@ class GameManager:
         reward = game.settings.get("win_reward_money", 100)
         rating = game.settings.get("rating_points_per_game", 5)
         for p in game.players.values():
+            if p.is_bot:
+                continue
             won = p in winners
             await db.add_game_result(p.user_id, won)
             await db.add_rating(p.user_id, rating)
             if won:
                 await db.update_balance(p.user_id, money=reward)
 
-        del self.games[game.chat_id]
+        self.games.pop(game.chat_id, None)
 
 
 manager = GameManager()
