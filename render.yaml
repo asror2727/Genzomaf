@@ -12,3 +12,5 @@ services:
         value: "7651404790"
       - key: DB_PATH
         value: mafia.db
+      - key: PYTHON_VERSION
+        value: "3.11.9"
