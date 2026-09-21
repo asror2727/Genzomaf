@@ -4,14 +4,18 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 
 from database import db
 from i18n import t, SUPPORTED_LANGS
+from game.roles import Role, ROLE_LOCALE_KEY
 from config import (
-    CHANNEL_USERNAME, OWNER_ID, PAYMENT_CARD, SHOP_ITEM_PRICES,
+    CHANNEL_USERNAME, OWNER_ID, PAYMENT_CARD, SHOP_ITEMS,
     DIAMOND_PACKAGES, MONEY_CONVERSION_RATE, MONEY_CONVERT_OPTIONS,
+    ROLE_PURCHASE_PRICE, TOKEN_TO_RATING_RATE,
 )
 
 router = Router()
 router.message.filter(F.chat.type == "private")
 router.callback_query.filter(F.message.chat.type == "private")
+
+_pending_boost: set[int] = set()
 
 
 def lang_keyboard() -> InlineKeyboardMarkup:
@@ -36,7 +40,11 @@ def main_menu_keyboard(lang: str, bot_username: str) -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def cmd_start(message: Message, bot: Bot):
     user = await db.get_or_create_user(message.from_user.id, message.from_user.full_name)
-    await message.answer(t(user["lang"], "choose_lang"), reply_markup=lang_keyboard())
+    if user["lang_selected"]:
+        me = await bot.get_me()
+        await message.answer(t(user["lang"], "welcome"), reply_markup=main_menu_keyboard(user["lang"], me.username))
+    else:
+        await message.answer(t(user["lang"], "choose_lang"), reply_markup=lang_keyboard())
 
 
 @router.callback_query(F.data.startswith("setlang_"))
@@ -44,9 +52,7 @@ async def cb_set_lang(callback: CallbackQuery, bot: Bot):
     lang = callback.data.split("_", 1)[1]
     await db.set_lang(callback.from_user.id, lang)
     me = await bot.get_me()
-    await callback.message.edit_text(
-        t(lang, "welcome"), reply_markup=main_menu_keyboard(lang, me.username)
-    )
+    await callback.message.edit_text(t(lang, "welcome"), reply_markup=main_menu_keyboard(lang, me.username))
     await callback.answer()
 
 
@@ -92,6 +98,7 @@ async def cb_back_main(callback: CallbackQuery, bot: Bot):
 
 @router.message(Command("profile"))
 async def cmd_profile(message: Message):
+    await db.update_user_name(message.from_user.id, message.from_user.full_name)
     await send_profile(message.chat.id, message.from_user.id, message.bot)
 
 
@@ -100,20 +107,58 @@ async def send_profile(chat_id: int, user_id: int, bot: Bot):
     if not user:
         user = await db.get_or_create_user(user_id, "Player")
     lang = user["lang"]
+    xp_needed = user["level"] * 1000
+    next_role_display = user["next_role"]
+    if next_role_display and next_role_display != "-":
+        try:
+            next_role_display = t(lang, ROLE_LOCALE_KEY[Role(next_role_display)])
+        except (ValueError, KeyError):
+            pass
     text = t(
         lang, "profile",
         id=user["user_id"], name=user["name"], money=user["money"], diamond=user["diamond"],
         token=user["token"], shield=user["shield"], killer_protect=user["killer_protect"],
         vote_protect=user["vote_protect"], gun=user["gun"], mask=user["mask"],
-        fake_doc=user["fake_doc"], next_role=user["next_role"], wins=user["wins"],
-        total_games=user["total_games"],
+        fake_doc=user["fake_doc"], bomb=user["bomb"], adrenaline=user["adrenaline"],
+        next_role=next_role_display, level=user["level"], xp=user["xp"], xp_needed=xp_needed,
+        wins=user["wins"], total_games=user["total_games"],
     )
-    kb = InlineKeyboardMarkup(inline_keyboard=[
+    kb_rows = [
         [InlineKeyboardButton(text=t(lang, "btn_shop"), callback_data="open_shop")],
         [InlineKeyboardButton(text=t(lang, "btn_buy_money"), callback_data="buy_money"),
          InlineKeyboardButton(text=t(lang, "btn_buy_diamond"), callback_data="buy_diamond")],
-    ])
-    await bot.send_message(chat_id, text, reply_markup=kb)
+    ]
+    toggle_items = [
+        ("shield", "🛡", user["shield"], user["use_shield"]),
+        ("killer_protect", "⛑️", user["killer_protect"], user["use_killer_protect"]),
+        ("vote_protect", "⚖️", user["vote_protect"], user["use_vote_protect"]),
+        ("mask", "🎭", user["mask"], user["use_mask"]),
+        ("fake_doc", "📁", user["fake_doc"], user["use_fake_doc"]),
+        ("bomb", "🧨", user["bomb"], user["use_bomb"]),
+        ("adrenaline", "💉", user["adrenaline"], user["use_adrenaline"]),
+    ]
+    row = []
+    for key, emoji, count, enabled in toggle_items:
+        if count <= 0:
+            continue
+        state = "🟢" if enabled else "🔴"
+        row.append(InlineKeyboardButton(text=f"{emoji} {state}", callback_data=f"toggleitem_{key}"))
+        if len(row) == 3:
+            kb_rows.append(row)
+            row = []
+    if row:
+        kb_rows.append(row)
+
+    await bot.send_message(chat_id, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=kb_rows))
+
+
+@router.callback_query(F.data.startswith("toggleitem_"))
+async def cb_toggle_item(callback: CallbackQuery, bot: Bot):
+    key = callback.data.split("_", 1)[1]
+    new_value = await db.toggle_item_use(callback.from_user.id, key)
+    await callback.answer("🟢 ON" if new_value else "🔴 OFF")
+    await callback.message.delete()
+    await send_profile(callback.message.chat.id, callback.from_user.id, bot)
 
 
 @router.callback_query(F.data == "back_profile")
@@ -128,30 +173,67 @@ async def cmd_rating(message: Message):
     lang = await db.get_lang(message.from_user.id)
     top = await db.top_rating(100)
     lines = [f"#{i+1} {name} — {points} ball" for i, (uid, name, points) in enumerate(top)]
-    text = "\n".join(lines) if lines else "—"
-    await message.answer(text)
+    text = t(lang, "reyting_header_note") + ("\n".join(lines) if lines else "—")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=t(lang, "boost_rating_btn"), callback_data="boost_rating")]])
+    await message.answer(text, reply_markup=kb)
 
 
-# ---------------- SHOP ----------------
+@router.callback_query(F.data == "boost_rating")
+async def cb_boost_rating(callback: CallbackQuery):
+    lang = await db.get_lang(callback.from_user.id)
+    _pending_boost.add(callback.from_user.id)
+    await callback.message.answer(t(lang, "boost_rating_prompt", rate=TOKEN_TO_RATING_RATE))
+    await callback.answer()
 
-_ITEM_LABELS = {
+
+def _awaiting_boost(message: Message) -> bool:
+    return (message.chat.type == "private" and message.from_user.id in _pending_boost
+            and bool(message.text) and not message.text.startswith("/"))
+
+
+@router.message(_awaiting_boost)
+async def handle_boost_input(message: Message):
+    _pending_boost.discard(message.from_user.id)
+    lang = await db.get_lang(message.from_user.id)
+    if not message.text.isdigit():
+        await message.answer(t(lang, "boost_rating_invalid"))
+        return
+    tokens = int(message.text)
+    user = await db.get_user(message.from_user.id)
+    if tokens <= 0 or user["token"] < tokens:
+        await message.answer(t(lang, "boost_rating_not_enough"))
+        return
+    points = tokens * TOKEN_TO_RATING_RATE
+    await db.update_balance(message.from_user.id, token=-tokens)
+    await db.add_rating(message.from_user.id, points)
+    await message.answer(t(lang, "boost_rating_success", tokens=tokens, points=points))
+
+
+_ITEM_LABEL_KEYS = {
     "shield": "shop_item_shield",
     "mask": "shop_item_mask",
     "gun": "shop_item_gun",
     "fake_doc": "shop_item_fakedoc",
+    "killer_protect": "shop_item_killer_protect",
+    "vote_protect": "shop_item_vote_protect",
+    "bomb": "shop_item_bomb",
+    "adrenaline": "shop_item_adrenaline",
 }
+_CURRENCY_EMOJI = {"diamond": "💎", "money": "💵"}
 
 
 @router.callback_query(F.data == "open_shop")
 async def cb_open_shop(callback: CallbackQuery):
     lang = await db.get_lang(callback.from_user.id)
     buttons = []
-    for key, label_key in _ITEM_LABELS.items():
-        price = SHOP_ITEM_PRICES[key]
+    for key, (price, currency) in SHOP_ITEMS.items():
+        label = t(lang, _ITEM_LABEL_KEYS[key])
         buttons.append([InlineKeyboardButton(
-            text=f"{t(lang, label_key)} — {price}💎",
-            callback_data=f"buyitem_{key}",
+            text=f"{label} — {price}{_CURRENCY_EMOJI[currency]}", callback_data=f"buyitem_{key}",
         )])
+    buttons.append([InlineKeyboardButton(
+        text=f"{t(lang, 'shop_item_role')} — {ROLE_PURCHASE_PRICE}💎", callback_data="buyrole_open"
+    )])
     buttons.append([InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="back_profile")])
     await callback.message.edit_text(t(lang, "shop_header"), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
     await callback.answer()
@@ -161,23 +243,44 @@ async def cb_open_shop(callback: CallbackQuery):
 async def cb_buy_item(callback: CallbackQuery):
     item = callback.data.split("_", 1)[1]
     lang = await db.get_lang(callback.from_user.id)
-    price = SHOP_ITEM_PRICES.get(item)
-    if price is None:
-        await callback.answer()
-        return
+    price, currency = SHOP_ITEMS[item]
     user = await db.get_user(callback.from_user.id)
-    if user["diamond"] < price:
+    if user[currency] < price:
         await callback.answer(t(lang, "shop_not_enough"), show_alert=True)
         return
     await db._conn.execute(
-        f"UPDATE users SET diamond = diamond - ?, {item} = {item} + 1 WHERE user_id=?",
+        f"UPDATE users SET {currency} = {currency} - ?, {item} = {item} + 1 WHERE user_id=?",
         (price, callback.from_user.id),
     )
     await db._conn.commit()
-    await callback.answer(t(lang, "shop_bought", item=t(lang, _ITEM_LABELS[item])), show_alert=True)
+    await callback.answer(t(lang, "shop_bought", item=t(lang, _ITEM_LABEL_KEYS[item])), show_alert=True)
 
 
-# ---------------- BUY MONEY (almazni pulga aylantirish) ----------------
+@router.callback_query(F.data == "buyrole_open")
+async def cb_buyrole_open(callback: CallbackQuery):
+    lang = await db.get_lang(callback.from_user.id)
+    buttons = [
+        [InlineKeyboardButton(text=t(lang, ROLE_LOCALE_KEY[role]), callback_data=f"buyrole_{role.value}")]
+        for role in [Role.DON, Role.MAFIA, Role.CIVILIAN, Role.COMMISSIONER, Role.DOCTOR]
+    ]
+    buttons.append([InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="open_shop")])
+    await callback.message.edit_text(t(lang, "shop_role_choose"), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("buyrole_"))
+async def cb_buy_role(callback: CallbackQuery):
+    role_value = callback.data.split("_", 1)[1]
+    lang = await db.get_lang(callback.from_user.id)
+    user = await db.get_user(callback.from_user.id)
+    if user["diamond"] < ROLE_PURCHASE_PRICE:
+        await callback.answer(t(lang, "shop_not_enough"), show_alert=True)
+        return
+    await db.update_balance(callback.from_user.id, diamond=-ROLE_PURCHASE_PRICE)
+    await db.set_next_role(callback.from_user.id, role_value)
+    role_name = t(lang, ROLE_LOCALE_KEY[Role(role_value)])
+    await callback.answer(t(lang, "shop_role_bought", role=role_name), show_alert=True)
+
 
 @router.callback_query(F.data == "buy_money")
 async def cb_buy_money(callback: CallbackQuery):
@@ -203,8 +306,6 @@ async def cb_convert_money(callback: CallbackQuery):
     await callback.answer(t(lang, "shop_bought", item=f"{n * MONEY_CONVERSION_RATE}💵"), show_alert=True)
 
 
-# ---------------- BUY DIAMOND (haqiqiy to'lov) ----------------
-
 @router.callback_query(F.data == "buy_diamond")
 async def cb_buy_diamond(callback: CallbackQuery):
     lang = await db.get_lang(callback.from_user.id)
@@ -223,16 +324,12 @@ async def cb_diamond_package(callback: CallbackQuery):
     amount, price = int(amount), int(price)
     lang = await db.get_lang(callback.from_user.id)
     await db.create_transaction(callback.from_user.id, "diamond", amount)
-    await callback.message.edit_text(
-        t(lang, "payment_instructions", amount=price).replace(PAYMENT_CARD, PAYMENT_CARD)
-    )
+    await callback.message.edit_text(t(lang, "payment_instructions", amount=price))
     await callback.answer()
 
 
 @router.message(F.photo)
 async def handle_receipt_photo(message: Message, bot: Bot):
-    """Foydalanuvchi to'lov chekini (skrinshot) yuborsa, kutilayotgan tranzaksiya bo'lsa
-    admin(owner)ga forward qilinadi va tasdiqlash tugmasi biriktiriladi."""
     lang = await db.get_lang(message.from_user.id)
     tx = await db.get_last_pending_for_user(message.from_user.id)
     if not tx:

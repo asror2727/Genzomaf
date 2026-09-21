@@ -23,6 +23,7 @@ def _admin_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="📜 Qoidalar", callback_data="adm_rules")],
         [InlineKeyboardButton(text="🏆 Premium guruhlar", callback_data="adm_premium")],
         [InlineKeyboardButton(text="🤖 NPC qo'shish", callback_data="adm_npc")],
+        [InlineKeyboardButton(text=t("uz", "admin_reset_period_btn"), callback_data="adm_reset_period")],
         [InlineKeyboardButton(text="📊 Statistika", callback_data="adm_stats")],
         [InlineKeyboardButton(text="📢 Broadcast", callback_data="adm_broadcast")],
     ])
@@ -153,6 +154,14 @@ async def cb_broadcast(callback: CallbackQuery):
     _admin_state[callback.from_user.id] = "broadcast"
     kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="adm_back")]])
     await callback.message.edit_text("Barcha foydalanuvchilarga yuboriladigan xabarni yozing:", reply_markup=kb)
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm_reset_period")
+async def cb_reset_period(callback: CallbackQuery):
+    await db.reset_period_stats()
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Orqaga", callback_data="adm_back")]])
+    await callback.message.edit_text(t("uz", "admin_reset_period_done"), reply_markup=kb)
     await callback.answer()
 
 
