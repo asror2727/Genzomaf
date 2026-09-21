@@ -35,11 +35,12 @@ ROLE_DESC_KEY = {
 }
 
 
-def distribute_roles(player_count: int) -> list[Role]:
+def distribute_roles(player_count: int, mafia_ratio: int = 4) -> list[Role]:
     """
     Odamlar soniga qarab rol ro'yxatini qaytaradi.
-    Qat'iy qoida: Don va Komissar HAR DOIM (2+ o'yinchida) bo'ladi.
-    Bu jadval kelajakda admin panel/JSON konfiguratsiyaga chiqariladi.
+    Qat'iy qoida: Don va Komissar HAR DOIM (2+ o'yinchida) bo'ladi — hech qachon
+    ikkinchi Don yoki Komissar berilmaydi.
+    mafia_ratio: 3 = "ko'proq" (har 3-o'yinchidan 1 mafiya), 4 = "kamroq" (har 4-o'yinchidan 1).
     """
     if player_count < 2:
         raise ValueError("Kamida 2 o'yinchi kerak")
@@ -47,8 +48,9 @@ def distribute_roles(player_count: int) -> list[Role]:
     roles: list[Role] = [Role.DON, Role.COMMISSIONER]
     remaining = player_count - 2
 
-    # taxminiy mafiya soni: har 4 tinch aholiga 1 mafiya
-    mafia_extra = max(0, (player_count // 5) - 1)
+    # Jami mafiya soni taxminan player_count / mafia_ratio bo'lishi kerak (Don shu songa kiradi)
+    target_total_mafia = max(1, round(player_count / mafia_ratio))
+    mafia_extra = max(0, target_total_mafia - 1)  # Don allaqachon hisoblangan
     mafia_extra = min(mafia_extra, remaining)
     roles.extend([Role.MAFIA] * mafia_extra)
     remaining -= mafia_extra
