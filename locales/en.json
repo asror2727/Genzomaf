@@ -167,5 +167,10 @@
   "admin_reset_period_btn": "🔄 Reset weekly ranking",
   "admin_reset_period_done": "✅ Weekly stats (top) cleared, everyone starts from 0.",
   "admin_group_langs_btn": "🌐 View group languages",
-  "item_toggle_row_title": "Turn your items on/off (if on, they trigger automatically during the game):"
+  "item_toggle_row_title": "Turn your items on/off (if on, they trigger automatically during the game):",
+  "reyting_choose_category": "Which ranking do you want to see?",
+  "reyting_tab_ball": "🏆 Top — Points",
+  "reyting_tab_diamond": "💎 Top — Diamonds",
+  "reyting_tab_money": "💵 Top — Money",
+  "reyting_tab_games": "🎮 Top — Games (most played)"
 }

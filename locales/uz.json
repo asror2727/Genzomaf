@@ -167,5 +167,10 @@
   "admin_reset_period_btn": "🔄 Haftalik reytingni yangilash",
   "admin_reset_period_done": "✅ Haftalik statistika (top) tozalandi, hammaga 0 dan boshlanadi.",
   "admin_group_langs_btn": "🌐 Guruh tillarini ko'rish",
-  "item_toggle_row_title": "Buyumlaringizni yoqish/o'chirish (yoqilgan bo'lsa o'yin paytida avtomatik ishlaydi):"
+  "item_toggle_row_title": "Buyumlaringizni yoqish/o'chirish (yoqilgan bo'lsa o'yin paytida avtomatik ishlaydi):",
+  "reyting_choose_category": "Qaysi reytingni ko'rmoqchisiz?",
+  "reyting_tab_ball": "🏆 Top — Ball",
+  "reyting_tab_diamond": "💎 Top — Almaz",
+  "reyting_tab_money": "💵 Top — Pul",
+  "reyting_tab_games": "🎮 Top — O'yin (eng ko'p o'ynagan)"
 }

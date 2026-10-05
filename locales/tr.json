@@ -167,5 +167,10 @@
   "admin_reset_period_btn": "🔄 Haftalık sıralamayı sıfırla",
   "admin_reset_period_done": "✅ Haftalık istatistikler (top) temizlendi, herkes 0'dan başlıyor.",
   "admin_group_langs_btn": "🌐 Grup dillerini görüntüle",
-  "item_toggle_row_title": "Eşyalarınızı açın/kapatın (açıksa oyun sırasında otomatik devreye girer):"
+  "item_toggle_row_title": "Eşyalarınızı açın/kapatın (açıksa oyun sırasında otomatik devreye girer):",
+  "reyting_choose_category": "Hangi sıralamayı görmek istiyorsunuz?",
+  "reyting_tab_ball": "🏆 Top — Puan",
+  "reyting_tab_diamond": "💎 Top — Elmas",
+  "reyting_tab_money": "💵 Top — Para",
+  "reyting_tab_games": "🎮 Top — Oyun (en çok oynayan)"
 }
