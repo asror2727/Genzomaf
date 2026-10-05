@@ -171,11 +171,70 @@ async def cb_back_profile(callback: CallbackQuery, bot: Bot):
 @router.message(Command("reyting"))
 async def cmd_rating(message: Message):
     lang = await db.get_lang(message.from_user.id)
-    top = await db.top_rating(100)
-    lines = [f"#{i+1} {name} — {points} ball" for i, (uid, name, points) in enumerate(top)]
-    text = t(lang, "reyting_header_note") + ("\n".join(lines) if lines else "—")
-    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text=t(lang, "boost_rating_btn"), callback_data="boost_rating")]])
-    await message.answer(text, reply_markup=kb)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t(lang, "reyting_tab_ball"), callback_data="reytop_ball")],
+        [InlineKeyboardButton(text=t(lang, "reyting_tab_diamond"), callback_data="reytop_diamond"),
+         InlineKeyboardButton(text=t(lang, "reyting_tab_money"), callback_data="reytop_money")],
+        [InlineKeyboardButton(text=t(lang, "reyting_tab_games"), callback_data="reytop_games")],
+    ])
+    await message.answer(t(lang, "reyting_header_note") + t(lang, "reyting_choose_category"), reply_markup=kb)
+
+
+_REYTING_TABS = {
+    "ball": ("top_rating", "reyting_tab_ball", "ball", None),
+    "diamond": ("top_by_diamond", "reyting_tab_diamond", "💎", None),
+    "money": ("top_by_money", "reyting_tab_money", "💵", None),
+    "games": ("top_by_games", "reyting_tab_games", "o'yin", None),
+}
+
+
+async def _render_reyting_tab(callback: CallbackQuery, tab: str):
+    lang = await db.get_lang(callback.from_user.id)
+    method_name, label_key, unit, _ = _REYTING_TABS[tab]
+    rows = await getattr(db, method_name)(100)
+    if not rows:
+        text = t(lang, "reyting_header_note") + "—"
+    else:
+        lines = [f"#{i+1} {name} — {value} {unit}" for i, (uid, name, value) in enumerate(rows)]
+        text = t(lang, "reyting_header_note") + t(lang, label_key) + "\n\n" + "\n".join(lines)
+    buttons = [[InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="reytop_menu")]]
+    if tab == "ball":
+        buttons.insert(0, [InlineKeyboardButton(text=t(lang, "boost_rating_btn"), callback_data="boost_rating")])
+    await callback.message.edit_text(text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "reytop_ball")
+async def cb_reytop_ball(callback: CallbackQuery):
+    await _render_reyting_tab(callback, "ball")
+
+
+@router.callback_query(F.data == "reytop_diamond")
+async def cb_reytop_diamond(callback: CallbackQuery):
+    await _render_reyting_tab(callback, "diamond")
+
+
+@router.callback_query(F.data == "reytop_money")
+async def cb_reytop_money(callback: CallbackQuery):
+    await _render_reyting_tab(callback, "money")
+
+
+@router.callback_query(F.data == "reytop_games")
+async def cb_reytop_games(callback: CallbackQuery):
+    await _render_reyting_tab(callback, "games")
+
+
+@router.callback_query(F.data == "reytop_menu")
+async def cb_reytop_menu(callback: CallbackQuery):
+    lang = await db.get_lang(callback.from_user.id)
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t(lang, "reyting_tab_ball"), callback_data="reytop_ball")],
+        [InlineKeyboardButton(text=t(lang, "reyting_tab_diamond"), callback_data="reytop_diamond"),
+         InlineKeyboardButton(text=t(lang, "reyting_tab_money"), callback_data="reytop_money")],
+        [InlineKeyboardButton(text=t(lang, "reyting_tab_games"), callback_data="reytop_games")],
+    ])
+    await callback.message.edit_text(t(lang, "reyting_header_note") + t(lang, "reyting_choose_category"), reply_markup=kb)
+    await callback.answer()
 
 
 @router.callback_query(F.data == "boost_rating")
