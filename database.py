@@ -253,6 +253,27 @@ class Database:
         )
         return await cur.fetchall()
 
+    async def top_by_diamond(self, limit: int = 100):
+        cur = await self._conn.execute(
+            "SELECT user_id, name, diamond FROM users WHERE diamond > 0 ORDER BY diamond DESC LIMIT ?",
+            (limit,),
+        )
+        return await cur.fetchall()
+
+    async def top_by_money(self, limit: int = 100):
+        cur = await self._conn.execute(
+            "SELECT user_id, name, money FROM users WHERE money > 0 ORDER BY money DESC LIMIT ?",
+            (limit,),
+        )
+        return await cur.fetchall()
+
+    async def top_by_games(self, limit: int = 100):
+        cur = await self._conn.execute(
+            "SELECT user_id, name, total_games FROM users WHERE total_games > 0 ORDER BY total_games DESC LIMIT ?",
+            (limit,),
+        )
+        return await cur.fetchall()
+
     @staticmethod
     def _row_to_user(row) -> dict:
         return dict(zip(_USER_COLUMNS, row))
