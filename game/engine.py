@@ -86,12 +86,30 @@ class GameManager:
 
     def __init__(self):
         self.games: dict[int, Game] = {}
+        self._bot_username: str | None = None
 
     def has_active(self, chat_id: int) -> bool:
         return chat_id in self.games
 
     def get(self, chat_id: int) -> Game | None:
         return self.games.get(chat_id)
+
+    async def _get_bot_username(self, bot: Bot) -> str:
+        if self._bot_username is None:
+            me = await bot.get_me()
+            self._bot_username = me.username
+        return self._bot_username
+
+    async def _join_keyboard(self, bot: Bot, lang: str, chat_id: int) -> InlineKeyboardMarkup:
+        """Qo'shilish tugmasi — bosilganda to'g'ridan-to'g'ri botning shaxsiy chatiga
+        deep-link orqali olib boradi va /start join_<chat_id> avtomatik yuboriladi.
+        Shu tufayli foydalanuvchi guruhda hech narsa qilmasdan, faqat botga o'tib, avtomatik
+        shu guruh o'yiniga yoziladi (har bir guruh uchun alohida, chalkashmaydi)."""
+        username = await self._get_bot_username(bot)
+        url = f"https://t.me/{username}?start=join_{chat_id}"
+        return InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t(lang, "reg_join_btn"), url=url)]
+        ])
 
     # ---------------- REGISTRATION ----------------
 
@@ -100,9 +118,7 @@ class GameManager:
         game = Game(chat_id, settings, lang)
         self.games[chat_id] = game
 
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t(lang, "reg_join_btn"), callback_data="reg_join")]
-        ])
+        kb = await self._join_keyboard(bot, lang, chat_id)
         text = t(lang, "reg_started", players="-", count=0)
         msg = await bot.send_message(chat_id, text, reply_markup=kb)
         game.reg_message_id = msg.message_id
@@ -187,9 +203,7 @@ class GameManager:
 
         names = ", ".join(p.mention() for p in game.players.values()) or "-"
         text = t(game.lang, "reg_started", players=names, count=len(game.players))
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t(game.lang, "reg_join_btn"), callback_data="reg_join")]
-        ])
+        kb = await self._join_keyboard(bot, game.lang, chat_id)
         msg = await bot.send_message(chat_id, text, reply_markup=kb)
         game.reg_message_id = msg.message_id
         if game.settings.get("auto_pin", True):
@@ -202,9 +216,7 @@ class GameManager:
     async def _refresh_registration_message(self, bot: Bot, game: Game):
         names = ", ".join(p.mention() for p in game.players.values()) or "-"
         text = t(game.lang, "reg_started", players=names, count=len(game.players))
-        kb = InlineKeyboardMarkup(inline_keyboard=[
-            [InlineKeyboardButton(text=t(game.lang, "reg_join_btn"), callback_data="reg_join")]
-        ])
+        kb = await self._join_keyboard(bot, game.lang, game.chat_id)
         try:
             await bot.edit_message_text(
                 text, chat_id=game.chat_id, message_id=game.reg_message_id, reply_markup=kb
@@ -653,6 +665,14 @@ class GameManager:
             if won:
                 await db.update_balance(p.user_id, money=reward)
                 await db.add_xp(p.user_id, 50)
+            # Har bir haqiqiy o'yinchiga shaxsiy natija va yangilangan profil yuboriladi
+            try:
+                if won:
+                    await bot.send_message(p.user_id, t(game.lang, "personal_win_dm", reward=reward))
+                else:
+                    await bot.send_message(p.user_id, t(game.lang, "personal_lose_dm"))
+            except TelegramBadRequest:
+                pass
 
         self.games.pop(game.chat_id, None)
 
