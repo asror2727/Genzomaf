@@ -5,6 +5,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 from database import db
 from i18n import t, SUPPORTED_LANGS
 from game.roles import Role, ROLE_LOCALE_KEY
+from game.engine import manager as game_manager
 from config import (
     CHANNEL_USERNAME, OWNER_ID, PAYMENT_CARD, SHOP_ITEMS,
     DIAMOND_PACKAGES, MONEY_CONVERSION_RATE, MONEY_CONVERT_OPTIONS,
@@ -40,6 +41,32 @@ def main_menu_keyboard(lang: str, bot_username: str) -> InlineKeyboardMarkup:
 @router.message(CommandStart())
 async def cmd_start(message: Message, bot: Bot):
     user = await db.get_or_create_user(message.from_user.id, message.from_user.full_name)
+    lang = user["lang"]
+
+    # Guruhdagi "Qo'shilish" tugmasi orqali deep-link bilan kelgan bo'lsa:
+    # https://t.me/<bot>?start=join_<chat_id> — foydalanuvchi avtomatik o'sha guruh
+    # o'yiniga yoziladi, hech qanday qo'shimcha amal qilishi shart emas.
+    parts = message.text.split(maxsplit=1)
+    payload = parts[1] if len(parts) > 1 else None
+    if payload and payload.startswith("join_"):
+        try:
+            target_chat_id = int(payload[len("join_"):])
+        except ValueError:
+            target_chat_id = None
+        if target_chat_id is not None:
+            result = await game_manager.add_player(bot, target_chat_id, message.from_user.id, message.from_user.full_name)
+            if result == "ok":
+                await message.answer(t(lang, "reg_joined_private"))
+            elif result == "already":
+                await message.answer(t(lang, "reg_already_joined"))
+            elif result == "full":
+                await message.answer(t(lang, "group_full"))
+            else:
+                await message.answer(t(lang, "reg_already_active"))
+            if not user["lang_selected"]:
+                await message.answer(t(lang, "choose_lang"), reply_markup=lang_keyboard())
+            return
+
     if user["lang_selected"]:
         me = await bot.get_me()
         await message.answer(t(user["lang"], "welcome"), reply_markup=main_menu_keyboard(user["lang"], me.username))
@@ -368,6 +395,17 @@ async def cb_convert_money(callback: CallbackQuery):
 @router.callback_query(F.data == "buy_diamond")
 async def cb_buy_diamond(callback: CallbackQuery):
     lang = await db.get_lang(callback.from_user.id)
+    trade_link = await db.kv_get("trade_group_link", "")
+    if trade_link:
+        # Admin savdo guruh linkini sozlagan — almaz xarid qilish shu guruhga yo'naltiriladi
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=t(lang, "btn_buy_diamond"), url=trade_link)],
+            [InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="back_profile")],
+        ])
+        await callback.message.edit_text(t(lang, "trade_group_intro"), reply_markup=kb)
+        await callback.answer()
+        return
+    # Agar admin hali savdo guruh linkini sozlamagan bo'lsa — eski chek yuborish usuliga tushadi
     buttons = [
         [InlineKeyboardButton(text=f"{amount}💎 — {price} so'm", callback_data=f"diamondpkg_{amount}_{price}")]
         for amount, price in DIAMOND_PACKAGES.items()

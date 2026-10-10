@@ -22,6 +22,8 @@ def _admin_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="💎 To'lovlarni tasdiqlash", callback_data="adm_transactions")],
         [InlineKeyboardButton(text="📜 Qoidalar", callback_data="adm_rules")],
         [InlineKeyboardButton(text="🏆 Premium guruhlar", callback_data="adm_premium")],
+        [InlineKeyboardButton(text="🎁 Foydalanuvchiga berish", callback_data="adm_give_balance")],
+        [InlineKeyboardButton(text="🔗 Savdo guruh linki", callback_data="adm_trade_link")],
         [InlineKeyboardButton(text="🤖 NPC qo'shish", callback_data="adm_npc")],
         [InlineKeyboardButton(text=t("uz", "admin_reset_period_btn"), callback_data="adm_reset_period")],
         [InlineKeyboardButton(text="📊 Statistika", callback_data="adm_stats")],
@@ -165,6 +167,36 @@ async def cb_reset_period(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "adm_give_balance")
+async def cb_give_balance(callback: CallbackQuery):
+    _admin_state[callback.from_user.id] = "give_balance"
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="adm_back")]])
+    await callback.message.edit_text(
+        "Foydalanuvchiga pul/almaz/token berish.\n\n"
+        "Format: <user_id> <miqdor> <turi>\n"
+        "Turlari: pul, almaz, token\n\n"
+        "Masalan: 7651404790 500 pul\n\n"
+        "⚠️ Foydalanuvchi avval botga kamida 1 marta /start bosgan bo'lishi kerak "
+        "(aks holda bazada topilmaydi).",
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm_trade_link")
+async def cb_trade_link(callback: CallbackQuery):
+    _admin_state[callback.from_user.id] = "trade_link"
+    current = await db.kv_get("trade_group_link", "(hali kiritilmagan)")
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="adm_back")]])
+    await callback.message.edit_text(
+        f"Joriy savdo guruh linki: {current}\n\n"
+        f"Almaz sotib olish tugmasi bosilganda foydalanuvchi shu linkka yo'naltiriladi.\n"
+        f"Yangi linkni yuboring (masalan https://t.me/mysavdoguruh):",
+        reply_markup=kb,
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "adm_npc")
 async def cb_npc(callback: CallbackQuery):
     _admin_state[callback.from_user.id] = "npc"
@@ -210,6 +242,30 @@ async def handle_admin_text_input(message: Message, bot: Bot):
             except Exception:
                 pass
         await message.answer(f"📢 Xabar {sent} ta foydalanuvchiga yuborildi.", reply_markup=_admin_menu_kb())
+    elif state == "trade_link":
+        await db.kv_set("trade_group_link", message.text.strip())
+        await message.answer("✅ Savdo guruh linki saqlandi.", reply_markup=_admin_menu_kb())
+    elif state == "give_balance":
+        parts = message.text.split()
+        aliases = {"pul": "money", "money": "money", "almaz": "diamond", "olmos": "diamond",
+                   "diamond": "diamond", "token": "token"}
+        if len(parts) != 3 or not parts[0].isdigit() or not parts[1].lstrip("-").isdigit() or parts[2].lower() not in aliases:
+            await message.answer("❌ Format noto'g'ri. Masalan: 7651404790 500 pul")
+            return
+        user_id = int(parts[0])
+        amount = int(parts[1])
+        column = aliases[parts[2].lower()]
+        target = await db.get_user(user_id)
+        if not target:
+            await message.answer("❌ Bu foydalanuvchi bazada topilmadi (hali botga /start bosmagan).")
+            return
+        await db.update_balance(user_id, **{column: amount})
+        await message.answer(f"✅ {user_id} ga {amount} {parts[2]} berildi.", reply_markup=_admin_menu_kb())
+        try:
+            lang = target["lang"]
+            await bot.send_message(user_id, t(lang, "admin_gift_received", amount=amount, kind=parts[2]))
+        except Exception:
+            pass
     elif state == "npc":
         parts = message.text.split()
         if len(parts) != 2 or not parts[1].lstrip("-").isdigit():

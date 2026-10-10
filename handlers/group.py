@@ -1,5 +1,6 @@
 import asyncio
 import random
+from datetime import datetime, timedelta, timezone
 
 from aiogram import Router, F, Bot
 from aiogram.filters import Command
@@ -334,6 +335,75 @@ async def cmd_token(message: Message):
           giver=mention(giver.id, giver.full_name), amount=amount,
           target=mention(target.id, target.full_name))
     )
+
+
+# ---------------- LOAN (qarz) ----------------
+
+LOAN_DAYS = 10
+
+
+@router.message(Command("loan"))
+async def cmd_loan(message: Message):
+    await _try_delete(message)
+    lang = await _group_lang(message.chat.id) or "uz"
+    if not message.reply_to_message:
+        await message.answer(t(lang, "loan_usage"))
+        return
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(t(lang, "loan_usage"))
+        return
+    amount = int(parts[1])
+    if amount <= 0:
+        return
+    lender = message.from_user
+    target = message.reply_to_message.from_user
+    if lender.id == target.id:
+        return
+    await db.get_or_create_user(lender.id, lender.full_name)
+    await db.get_or_create_user(target.id, target.full_name)
+
+    existing = await db.get_active_loan(target.id)
+    if existing:
+        await message.answer(t(lang, "loan_already_has"))
+        return
+
+    due_at = (datetime.now(timezone.utc) + timedelta(days=LOAN_DAYS)).isoformat()
+    await db.create_loan(target.id, lender.id, amount, due_at)
+    await db.update_balance(target.id, money=amount)
+    await message.answer(
+        t(lang, "loan_given",
+          lender=mention(lender.id, lender.full_name), amount=amount,
+          target=mention(target.id, target.full_name), days=LOAN_DAYS)
+    )
+
+
+@router.message(Command("qaytar"))
+async def cmd_qaytar(message: Message):
+    await _try_delete(message)
+    lang = await _group_lang(message.chat.id) or "uz"
+    parts = message.text.split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer(t(lang, "loan_repay_usage"))
+        return
+    amount = int(parts[1])
+    user = message.from_user
+    loan = await db.get_active_loan(user.id)
+    if not loan:
+        await message.answer(t(lang, "loan_none"))
+        return
+    loan_id, loan_amount, owed, due_at = loan
+    user_data = await db.get_user(user.id)
+    pay = min(amount, owed, user_data["money"])
+    if pay <= 0:
+        await message.answer(t(lang, "loan_repay_no_money"))
+        return
+    await db.update_balance(user.id, money=-pay)
+    remaining = await db.repay_loan(loan_id, pay)
+    if remaining == 0:
+        await message.answer(t(lang, "loan_repaid_full", amount=pay))
+    else:
+        await message.answer(t(lang, "loan_repaid_partial", amount=pay, remaining=remaining))
 
 
 # ---------------- CLAIM (olib-qol) tizimi: /giveaway va reply'siz /send ----------------
