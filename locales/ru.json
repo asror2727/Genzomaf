@@ -172,5 +172,19 @@
   "reyting_tab_ball": "🏆 Топ — Баллы",
   "reyting_tab_diamond": "💎 Топ — Алмазы",
   "reyting_tab_money": "💵 Топ — Деньги",
-  "reyting_tab_games": "🎮 Топ — Игры (больше всех сыграл)"
+  "reyting_tab_games": "🎮 Топ — Игры (больше всех сыграл)",
+  "group_full": "Группа заполнена.",
+  "loan_usage": "Ответьте на сообщение и напишите /loan 1000 (займ на 10 дней).",
+  "loan_already_has": "❌ У этого человека уже есть непогашенный займ.",
+  "loan_given": "💰 {lender} одолжил(а) {amount} 💵 игроку {target} (срок {days} дней).",
+  "loan_repay_usage": "Использование: /qaytar 100 (погасить столько из займа)",
+  "loan_none": "У вас нет активного займа.",
+  "loan_repay_no_money": "❌ У вас недостаточно денег на балансе.",
+  "loan_repaid_full": "✅ Займ полностью погашен! (оплачено {amount} 💵)",
+  "loan_repaid_partial": "✅ Оплачено {amount} 💵. Остаток долга: {remaining} 💵",
+  "loan_overdue_collected": "⏰ Срок займа истёк, с вашего баланса автоматически списано {amount} 💵.",
+  "trade_group_intro": "💎 Для покупки алмазов перейдите в торговую группу:",
+  "admin_gift_received": "🎁 Администратор подарил вам {amount} {kind}!",
+  "personal_win_dm": "🎉 Вы победили!\nЗа победу вам начислено 💵 {reward}!",
+  "personal_lose_dm": "😔 Игра окончена. На этот раз вы проиграли. Удачи в следующий раз!"
 }

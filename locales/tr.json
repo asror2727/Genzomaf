@@ -172,5 +172,19 @@
   "reyting_tab_ball": "🏆 Top — Puan",
   "reyting_tab_diamond": "💎 Top — Elmas",
   "reyting_tab_money": "💵 Top — Para",
-  "reyting_tab_games": "🎮 Top — Oyun (en çok oynayan)"
+  "reyting_tab_games": "🎮 Top — Oyun (en çok oynayan)",
+  "group_full": "Grup dolu.",
+  "loan_usage": "Birine yanıt verip /loan 1000 yazın (10 günlük borç).",
+  "loan_already_has": "❌ Bu kişinin zaten ödenmemiş bir borcu var.",
+  "loan_given": "💰 {lender}, {target} kişisine {amount} 💵 borç verdi ({days} gün vade).",
+  "loan_repay_usage": "Kullanım: /qaytar 100 (borcunuzdan bu kadarını ödeyin)",
+  "loan_none": "Aktif bir borcunuz yok.",
+  "loan_repay_no_money": "❌ Bakiyenizde yeterli para yok.",
+  "loan_repaid_full": "✅ Borcunuz tamamen ödendi! ({amount} 💵 ödendi)",
+  "loan_repaid_partial": "✅ {amount} 💵 ödendi. Kalan borç: {remaining} 💵",
+  "loan_overdue_collected": "⏰ Borcunuzun vadesi geçtiği için bakiyenizden {amount} 💵 otomatik olarak kesildi.",
+  "trade_group_intro": "💎 Elmas satın almak için ticaret grubuna gidin:",
+  "admin_gift_received": "🎁 Yönetici size {amount} {kind} hediye etti!",
+  "personal_win_dm": "🎉 Kazandınız!\nKazandığınız için size 💵 {reward} verildi!",
+  "personal_lose_dm": "😔 Oyun bitti. Bu sefer kaybettiniz. Bir dahaki sefere bol şans!"
 }

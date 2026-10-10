@@ -172,5 +172,19 @@
   "reyting_tab_ball": "🏆 Top — Ball",
   "reyting_tab_diamond": "💎 Top — Almaz",
   "reyting_tab_money": "💵 Top — Pul",
-  "reyting_tab_games": "🎮 Top — O'yin (eng ko'p o'ynagan)"
+  "reyting_tab_games": "🎮 Top — O'yin (eng ko'p o'ynagan)",
+  "group_full": "Guruh to'lgan.",
+  "loan_usage": "Kimgadur reply qilib /loan 1000 deb yozing (10 kun muddatga qarz).",
+  "loan_already_has": "❌ Bu odamda allaqachon to'lanmagan qarz bor.",
+  "loan_given": "💰 {lender} {target} ga {amount} 💵 qarz berdi ({days} kun muddatga).",
+  "loan_repay_usage": "Foydalanish: /qaytar 100 (qarzingizdan shuncha pul qaytarasiz)",
+  "loan_none": "Sizda faol qarz yo'q.",
+  "loan_repay_no_money": "❌ Balansingizda yetarli pul yo'q.",
+  "loan_repaid_full": "✅ Qarzingiz to'liq yopildi! ({amount} 💵 to'landi)",
+  "loan_repaid_partial": "✅ {amount} 💵 to'landi. Qolgan qarz: {remaining} 💵",
+  "loan_overdue_collected": "⏰ Qarzingiz muddati o'tgani uchun hisobingizdan {amount} 💵 avtomatik yechib olindi.",
+  "trade_group_intro": "💎 Almaz sotib olish uchun savdo guruhiga o'ting:",
+  "admin_gift_received": "🎁 Sizga admin tomonidan {amount} {kind} berildi!",
+  "personal_win_dm": "🎉 Siz yutdingiz!\nYutganingiz uchun sizga 💵 {reward} berildi!",
+  "personal_lose_dm": "😔 O'yin tugadi. Siz bu safar yutqazdingiz. Keyingi safar omad yor bo'lsin!"
 }

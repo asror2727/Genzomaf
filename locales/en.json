@@ -172,5 +172,19 @@
   "reyting_tab_ball": "🏆 Top — Points",
   "reyting_tab_diamond": "💎 Top — Diamonds",
   "reyting_tab_money": "💵 Top — Money",
-  "reyting_tab_games": "🎮 Top — Games (most played)"
+  "reyting_tab_games": "🎮 Top — Games (most played)",
+  "group_full": "The group is full.",
+  "loan_usage": "Reply to someone and type /loan 1000 (10-day loan).",
+  "loan_already_has": "❌ This person already has an unpaid loan.",
+  "loan_given": "💰 {lender} lent {amount} 💵 to {target} (due in {days} days).",
+  "loan_repay_usage": "Usage: /qaytar 100 (repay that much of your loan)",
+  "loan_none": "You don't have an active loan.",
+  "loan_repay_no_money": "❌ You don't have enough money in your balance.",
+  "loan_repaid_full": "✅ Your loan is fully repaid! ({amount} 💵 paid)",
+  "loan_repaid_partial": "✅ {amount} 💵 paid. Remaining debt: {remaining} 💵",
+  "loan_overdue_collected": "⏰ Your loan was overdue, so {amount} 💵 was automatically deducted from your balance.",
+  "trade_group_intro": "💎 To buy diamonds, go to the trade group:",
+  "admin_gift_received": "🎁 The admin gave you {amount} {kind}!",
+  "personal_win_dm": "🎉 You won!\nYou were given 💵 {reward} for winning!",
+  "personal_lose_dm": "😔 Game over. You lost this time. Good luck next time!"
 }

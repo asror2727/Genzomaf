@@ -172,5 +172,19 @@
   "reyting_tab_ball": "🏆 Топ — Ұпай",
   "reyting_tab_diamond": "💎 Топ — Алмас",
   "reyting_tab_money": "💵 Топ — Ақша",
-  "reyting_tab_games": "🎮 Топ — Ойын (ең көп ойнаған)"
+  "reyting_tab_games": "🎮 Топ — Ойын (ең көп ойнаған)",
+  "group_full": "Топ толды.",
+  "loan_usage": "Біреуге жауап беріп /loan 1000 деп жазыңыз (10 күндік қарыз).",
+  "loan_already_has": "❌ Бұл адамда төленбеген қарыз бар.",
+  "loan_given": "💰 {lender} {target} адамына {amount} 💵 қарызға берді ({days} күнге).",
+  "loan_repay_usage": "Қолдану: /qaytar 100 (қарызыңыздан осынча төлейсіз)",
+  "loan_none": "Сізде белсенді қарыз жоқ.",
+  "loan_repay_no_money": "❌ Балансыңызда жеткілікті ақша жоқ.",
+  "loan_repaid_full": "✅ Қарызыңыз толық жабылды! ({amount} 💵 төленді)",
+  "loan_repaid_partial": "✅ {amount} 💵 төленді. Қалған қарыз: {remaining} 💵",
+  "loan_overdue_collected": "⏰ Қарыз мерзімі өткендіктен, балансыңыздан {amount} 💵 автоматты түрде шегерілді.",
+  "trade_group_intro": "💎 Алмас сатып алу үшін сауда тобына өтіңіз:",
+  "admin_gift_received": "🎁 Әкімші сізге {amount} {kind} сыйлады!",
+  "personal_win_dm": "🎉 Сіз жеңдіңіз!\nЖеңгеніңіз үшін сізге 💵 {reward} берілді!",
+  "personal_lose_dm": "😔 Ойын аяқталды. Бұл жолы сіз ұттыңыз. Келесі жолы сәттілік тілейміз!"
 }
