@@ -67,6 +67,17 @@ CREATE TABLE IF NOT EXISTS kv_store (
     key TEXT PRIMARY KEY,
     value TEXT
 );
+
+CREATE TABLE IF NOT EXISTS loans (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    lender_id INTEGER,
+    amount INTEGER,
+    owed INTEGER,
+    due_at TEXT,
+    repaid INTEGER DEFAULT 0,
+    created_at TEXT DEFAULT CURRENT_TIMESTAMP
+);
 """
 
 
@@ -415,6 +426,46 @@ class Database:
         cur = await self._conn.execute("SELECT user_id FROM users")
         rows = await cur.fetchall()
         return [r[0] for r in rows]
+
+    # ---------- LOANS (qarz / /loan) ----------
+    async def get_active_loan(self, user_id: int):
+        cur = await self._conn.execute(
+            "SELECT id, amount, owed, due_at FROM loans WHERE user_id=? AND repaid=0 ORDER BY id DESC LIMIT 1",
+            (user_id,),
+        )
+        return await cur.fetchone()
+
+    async def create_loan(self, user_id: int, lender_id: int, amount: int, due_at: str) -> int:
+        cur = await self._conn.execute(
+            "INSERT INTO loans (user_id, lender_id, amount, owed, due_at) VALUES (?, ?, ?, ?, ?)",
+            (user_id, lender_id, amount, amount, due_at),
+        )
+        await self._conn.commit()
+        return cur.lastrowid
+
+    async def repay_loan(self, loan_id: int, pay_amount: int) -> int:
+        """To'langan miqdorni ayiradi, qolgan qarz miqdorini qaytaradi (0 bo'lsa repaid=1 qiladi)."""
+        cur = await self._conn.execute("SELECT owed FROM loans WHERE id=?", (loan_id,))
+        row = await cur.fetchone()
+        if not row:
+            return 0
+        new_owed = max(0, row[0] - pay_amount)
+        repaid = 1 if new_owed == 0 else 0
+        await self._conn.execute(
+            "UPDATE loans SET owed=?, repaid=? WHERE id=?", (new_owed, repaid, loan_id)
+        )
+        await self._conn.commit()
+        return new_owed
+
+    async def overdue_loans(self, now_iso: str):
+        cur = await self._conn.execute(
+            "SELECT id, user_id, owed FROM loans WHERE repaid=0 AND due_at < ?", (now_iso,)
+        )
+        return await cur.fetchall()
+
+    async def force_close_loan(self, loan_id: int):
+        await self._conn.execute("UPDATE loans SET repaid=1, owed=0 WHERE id=?", (loan_id,))
+        await self._conn.commit()
 
     async def group_top(self, chat_id: int, limit: int = 20):
         """Hozircha guruh ichidagi statistika alohida saqlanmaydi — global reyting qaytariladi.

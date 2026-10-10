@@ -73,7 +73,7 @@ ROLE_PURCHASE_PRICE = 5
 DIAMOND_PACKAGES = {1: 1000, 10: 9000}
 
 # Pulga konvertatsiya qilinadigan almaz miqdorlari (200 pul = 1 almaz)
-MONEY_CONVERSION_RATE = 200  # 1 almaz = 200 pul
+MONEY_CONVERSION_RATE = 250  # 1 almaz = 250 pul
 MONEY_CONVERT_OPTIONS = [1, 5, 10, 50]
 
 # Genzo tokenni reyting balliga almashtirish kursi
