@@ -334,7 +334,7 @@ class GameManager:
         game.day_number += 1
         game.night_actions = {}
 
-        await bot.send_message(game.chat_id, t(game.lang, "night_intro"))
+        await self._send_phase_media(bot, game.chat_id, "night_image", t(game.lang, "night_intro"))
         alive = game.alive_players()
         await bot.send_message(
             game.chat_id,
@@ -512,7 +512,7 @@ class GameManager:
                                 break
 
         game.phase = Phase.DAY
-        await bot.send_message(game.chat_id, t(game.lang, "day_intro", day=game.day_number))
+        await self._send_phase_media(bot, game.chat_id, "day_image", t(game.lang, "day_intro", day=game.day_number))
         await bot.send_message(
             game.chat_id,
             t(game.lang, "alive_players_header", players=game.format_alive_list(),
@@ -540,6 +540,22 @@ class GameManager:
         except asyncio.CancelledError:
             return
         await self._start_vote(bot, game)
+
+    async def _send_phase_media(self, bot: Bot, chat_id: int, kv_key: str, caption: str):
+        """Admin panelda tun/kun uchun rasm yoki GIF sozlangan bo'lsa, shu bilan birga yuboradi;
+        aks holda oddiy matn sifatida yuboradi."""
+        file_id = await db.kv_get(f"{kv_key}_file_id", "")
+        kind = await db.kv_get(f"{kv_key}_kind", "photo")
+        if not file_id:
+            await bot.send_message(chat_id, caption)
+            return
+        try:
+            if kind == "animation":
+                await bot.send_animation(chat_id, file_id, caption=caption)
+            else:
+                await bot.send_photo(chat_id, file_id, caption=caption)
+        except TelegramBadRequest:
+            await bot.send_message(chat_id, caption)
 
     async def _safe_send(self, bot: Bot, user_id: int, text: str, **kwargs):
         try:
