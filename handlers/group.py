@@ -202,7 +202,7 @@ async def cmd_vaqt(message: Message, bot: Bot):
 async def cmd_top(message: Message):
     await _try_delete(message)
     lang = await _group_lang(message.chat.id) or "uz"
-    rows = await db.top_weekly_percent(20, min_games=3)
+    rows = await db.top_weekly_percent(20, min_games=1)
     if not rows:
         await message.answer(t(lang, "top_empty") + "\n" + t(lang, "top_need_more_games"))
         return
@@ -670,6 +670,8 @@ async def cmd_lovebirds(message: Message):
 
 def _settings_main_kb(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text=t(lang, "settings_menu_giveaway"), callback_data="set_cat_giveaway")],
+        [InlineKeyboardButton(text=t(lang, "settings_menu_roles"), callback_data="set_cat_roles")],
         [InlineKeyboardButton(text=t(lang, "settings_menu_time"), callback_data="set_cat_time")],
         [InlineKeyboardButton(text=t(lang, "settings_menu_silence"), callback_data="set_cat_silence")],
         [InlineKeyboardButton(text=t(lang, "settings_menu_items"), callback_data="set_cat_items")],
@@ -695,6 +697,57 @@ _OTHER_TOGGLE_KEYS = ["auto_pin", "anonymous_vote", "show_roles_on_register", "g
 _ITEM_TOGGLE_KEYS = ["item_fake_doc_enabled", "item_shield_enabled", "item_mask_enabled",
                      "item_killer_protect_enabled", "item_vote_protect_enabled",
                      "item_gun_enabled", "item_bomb_enabled", "item_adrenaline_enabled"]
+_GIVEAWAY_TOGGLE_KEYS = ["giveaway_diamond_enabled", "giveaway_money_enabled", "giveaway_shield_enabled",
+                        "giveaway_mask_enabled", "giveaway_gun_enabled", "giveaway_fake_doc_enabled"]
+_ROLE_TOGGLE_KEYS = ["don_beats_mafia_vote", "group_roles_by_side", "show_roles_on_register"]
+
+
+@router.callback_query(F.data == "set_cat_giveaway")
+async def cb_set_giveaway(callback: CallbackQuery):
+    chat_id = callback.message.chat.id
+    lang = await _group_lang(chat_id) or "uz"
+    settings = await db.get_group_settings(chat_id)
+    buttons = []
+    for key in _GIVEAWAY_TOGGLE_KEYS:
+        value = settings.get(key, True)
+        label = f"{key.replace('giveaway_', '').replace('_enabled', '')}: {t(lang, 'settings_on') if value else t(lang, 'settings_off')}"
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"toggle_{key}")])
+    buttons.append([InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="set_back")])
+    await callback.message.edit_text(t(lang, "settings_menu_giveaway"), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.answer()
+
+
+@router.callback_query(F.data == "set_cat_roles")
+async def cb_set_roles(callback: CallbackQuery):
+    chat_id = callback.message.chat.id
+    lang = await _group_lang(chat_id) or "uz"
+    settings = await db.get_group_settings(chat_id)
+    buttons = []
+    ratio = settings.get("mafia_ratio", 4)
+    buttons.append([
+        InlineKeyboardButton(text=("✅ " if ratio == 3 else "") + "Ko'proq (1/3)", callback_data="setratio_3"),
+        InlineKeyboardButton(text=("✅ " if ratio == 4 else "") + "Kamroq (1/4)", callback_data="setratio_4"),
+    ])
+    for key in _ROLE_TOGGLE_KEYS:
+        value = settings.get(key, False)
+        label = f"{key}: {t(lang, 'settings_on') if value else t(lang, 'settings_off')}"
+        buttons.append([InlineKeyboardButton(text=label, callback_data=f"toggle_{key}")])
+    buttons.append([InlineKeyboardButton(text=t(lang, "btn_back"), callback_data="set_back")])
+    await callback.message.edit_text(t(lang, "settings_menu_roles"), reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+    await callback.answer()
+
+
+@router.callback_query(F.data.startswith("setratio_"))
+async def cb_set_ratio(callback: CallbackQuery, bot: Bot):
+    chat_id = callback.message.chat.id
+    lang = await _group_lang(chat_id) or "uz"
+    if not await _is_group_admin(bot, chat_id, callback.from_user.id):
+        await callback.answer(t(lang, "not_owner"), show_alert=True)
+        return
+    ratio = int(callback.data.split("_", 1)[1])
+    await db.update_group_settings(chat_id, mafia_ratio=ratio)
+    await callback.answer(t(lang, "settings_saved"))
+    await cb_set_roles(callback)
 
 
 @router.callback_query(F.data == "set_cat_time")
@@ -772,6 +825,10 @@ async def cb_toggle_setting(callback: CallbackQuery, bot: Bot):
     await callback.answer(t(lang, "settings_saved"))
     if key in _ITEM_TOGGLE_KEYS:
         await cb_set_items(callback)
+    elif key in _GIVEAWAY_TOGGLE_KEYS:
+        await cb_set_giveaway(callback)
+    elif key in _ROLE_TOGGLE_KEYS:
+        await cb_set_roles(callback)
     elif key == "dead_can_chat":
         await cb_set_silence(callback, bot)
     else:

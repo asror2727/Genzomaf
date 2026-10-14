@@ -25,6 +25,8 @@ def _admin_menu_kb() -> InlineKeyboardMarkup:
         [InlineKeyboardButton(text="🎁 Foydalanuvchiga berish", callback_data="adm_give_balance")],
         [InlineKeyboardButton(text="🔗 Savdo guruh linki", callback_data="adm_trade_link")],
         [InlineKeyboardButton(text="🤖 NPC qo'shish", callback_data="adm_npc")],
+        [InlineKeyboardButton(text="🌃 Tun rasmi/GIF", callback_data="adm_night_image"),
+         InlineKeyboardButton(text="🌅 Kun rasmi/GIF", callback_data="adm_day_image")],
         [InlineKeyboardButton(text=t("uz", "admin_reset_period_btn"), callback_data="adm_reset_period")],
         [InlineKeyboardButton(text="📊 Statistika", callback_data="adm_stats")],
         [InlineKeyboardButton(text="📢 Broadcast", callback_data="adm_broadcast")],
@@ -183,6 +185,26 @@ async def cb_give_balance(callback: CallbackQuery):
     await callback.answer()
 
 
+@router.callback_query(F.data == "adm_night_image")
+async def cb_night_image(callback: CallbackQuery):
+    _admin_state[callback.from_user.id] = "night_image"
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="adm_back")]])
+    await callback.message.edit_text(
+        "🌃 Tun boshlanganda yuboriladigan rasm yoki GIF'ni yuboring.", reply_markup=kb
+    )
+    await callback.answer()
+
+
+@router.callback_query(F.data == "adm_day_image")
+async def cb_day_image(callback: CallbackQuery):
+    _admin_state[callback.from_user.id] = "day_image"
+    kb = InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="⬅️ Bekor qilish", callback_data="adm_back")]])
+    await callback.message.edit_text(
+        "🌅 Kun boshlanganda yuboriladigan rasm yoki GIF'ni yuboring.", reply_markup=kb
+    )
+    await callback.answer()
+
+
 @router.callback_query(F.data == "adm_trade_link")
 async def cb_trade_link(callback: CallbackQuery):
     _admin_state[callback.from_user.id] = "trade_link"
@@ -208,6 +230,30 @@ async def cb_npc(callback: CallbackQuery):
         reply_markup=kb,
     )
     await callback.answer()
+
+
+def _awaiting_admin_media(message: Message) -> bool:
+    if message.chat.type != "private":
+        return False
+    if not (message.photo or message.animation):
+        return False
+    return _admin_state.get(message.from_user.id) in ("night_image", "day_image")
+
+
+@router.message(_awaiting_admin_media)
+async def handle_admin_media_input(message: Message):
+    state = _admin_state.pop(message.from_user.id)
+    key = "night_image" if state == "night_image" else "day_image"
+    if message.photo:
+        file_id = message.photo[-1].file_id
+        kind = "photo"
+    else:
+        file_id = message.animation.file_id
+        kind = "animation"
+    await db.kv_set(f"{key}_file_id", file_id)
+    await db.kv_set(f"{key}_kind", kind)
+    label = "Tun" if key == "night_image" else "Kun"
+    await message.answer(f"✅ {label} uchun rasm/GIF saqlandi.", reply_markup=_admin_menu_kb())
 
 
 def _has_pending_admin_input(message: Message) -> bool:
