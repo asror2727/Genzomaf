@@ -186,5 +186,7 @@
   "trade_group_intro": "💎 Almaz sotib olish uchun savdo guruhiga o'ting:",
   "admin_gift_received": "🎁 Sizga admin tomonidan {amount} {kind} berildi!",
   "personal_win_dm": "🎉 Siz yutdingiz!\nYutganingiz uchun sizga 💵 {reward} berildi!",
-  "personal_lose_dm": "😔 O'yin tugadi. Siz bu safar yutqazdingiz. Keyingi safar omad yor bo'lsin!"
+  "personal_lose_dm": "😔 O'yin tugadi. Siz bu safar yutqazdingiz. Keyingi safar omad yor bo'lsin!",
+  "settings_menu_giveaway": "🎁 Giveaway",
+  "settings_menu_roles": "🎭 Rollar"
 }

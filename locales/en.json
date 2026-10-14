@@ -186,5 +186,7 @@
   "trade_group_intro": "💎 To buy diamonds, go to the trade group:",
   "admin_gift_received": "🎁 The admin gave you {amount} {kind}!",
   "personal_win_dm": "🎉 You won!\nYou were given 💵 {reward} for winning!",
-  "personal_lose_dm": "😔 Game over. You lost this time. Good luck next time!"
+  "personal_lose_dm": "😔 Game over. You lost this time. Good luck next time!",
+  "settings_menu_giveaway": "🎁 Giveaway",
+  "settings_menu_roles": "🎭 Roles"
 }

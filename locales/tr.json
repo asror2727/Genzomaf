@@ -186,5 +186,7 @@
   "trade_group_intro": "💎 Elmas satın almak için ticaret grubuna gidin:",
   "admin_gift_received": "🎁 Yönetici size {amount} {kind} hediye etti!",
   "personal_win_dm": "🎉 Kazandınız!\nKazandığınız için size 💵 {reward} verildi!",
-  "personal_lose_dm": "😔 Oyun bitti. Bu sefer kaybettiniz. Bir dahaki sefere bol şans!"
+  "personal_lose_dm": "😔 Oyun bitti. Bu sefer kaybettiniz. Bir dahaki sefere bol şans!",
+  "settings_menu_giveaway": "🎁 Hediye dağıtımı",
+  "settings_menu_roles": "🎭 Roller"
 }
